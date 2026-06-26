@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Analysis — Caco</title>
+<script src="data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f8;color:#1a1d2e;font-size:14px;line-height:1.5}
+
+/* HEADER */
+.site-header{background:#fff;border-bottom:1px solid #e2e5ef;padding:18px 32px;position:sticky;top:0;z-index:100;box-shadow:0 1px 6px rgba(0,0,0,.06);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.site-header h1{font-size:18px;font-weight:700;color:#1a1d2e;letter-spacing:-.3px}
+.site-header p{font-size:12px;color:#7a8099;margin-top:2px}
+.date-badge{font-size:12px;font-weight:500;background:#f0f2fa;border:1px solid #e2e5ef;color:#4a5068;padding:5px 12px;border-radius:6px;white-space:nowrap}
+
+/* TABS */
+.tab-nav{display:flex;gap:0;background:#fff;border-bottom:2px solid #e2e5ef;padding:0 32px;overflow-x:auto}
+.tab-btn{padding:14px 20px;font-size:13px;font-weight:600;border:none;background:transparent;cursor:pointer;color:#7a8099;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;display:flex;align-items:center;gap:8px;white-space:nowrap;flex-shrink:0}
+.tab-btn:hover{color:#1a1d2e}
+.tab-btn.t-sale.active {color:#2563eb;border-bottom-color:#2563eb}
+.tab-btn.t-nosale.active{color:#d97706;border-bottom-color:#d97706}
+.tab-btn.t-dead.active  {color:#dc2626;border-bottom-color:#dc2626}
+.badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#f0f2fa;color:#7a8099}
+.t-sale.active  .badge{background:#eff4ff;color:#2563eb}
+.t-nosale.active .badge{background:#fffbeb;color:#d97706}
+.t-dead.active   .badge{background:#fff0f0;color:#dc2626}
+
+/* PAGE */
+.page{display:none;padding:24px 32px 40px}.page.active{display:block}
+
+/* CARDS */
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+.card{background:#fff;border:1.5px solid #e2e5ef;border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s;border-top:3px solid var(--c)}
+.card:hover{box-shadow:0 2px 10px rgba(0,0,0,.08);transform:translateY(-1px)}
+.card.active{border-color:var(--c);box-shadow:0 2px 12px rgba(0,0,0,.1)}
+/* branch palette */
+[data-branch="ALL"]{--c:#64748b}
+[data-branch="KNR"]{--c:#2563eb}
+[data-branch="KPBA"]{--c:#7c3aed}
+[data-branch="TPBA"]{--c:#059669}
+[data-branch="CHK"]{--c:#dc2626}
+/* saleable overrides */
+.sale-card[data-branch="ALL"]{--c:#2563eb}
+.sale-card[data-branch="KNR"]{--c:#2563eb}
+.sale-card[data-branch="KPBA"]{--c:#7c3aed}
+.sale-card[data-branch="TPBA"]{--c:#059669}
+.sale-card[data-branch="CHK"]{--c:#dc2626}
+/* nosale overrides */
+.ns-card[data-branch="ALL"]{--c:#d97706}
+.ns-card[data-branch="KNR"]{--c:#2563eb}
+.ns-card[data-branch="KPBA"]{--c:#7c3aed}
+.ns-card[data-branch="TPBA"]{--c:#059669}
+.ns-card[data-branch="CHK"]{--c:#dc2626}
+/* dead overrides */
+.dead-card[data-branch="ALL"]{--c:#dc2626}
+.dead-card[data-branch="KNR"]{--c:#dc2626}
+.dead-card[data-branch="KPBA"]{--c:#9333ea}
+.dead-card[data-branch="TPBA"]{--c:#d97706}
+.dead-card[data-branch="CHK"]{--c:#b45309}
+.card-label{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c);margin-bottom:6px}
+.card-value{font-size:19px;font-weight:700;color:#1a1d2e;letter-spacing:-.3px;line-height:1.1}
+.card-sub{font-size:11px;color:#7a8099;margin-top:5px}
+.card-sub b{color:#4a5068;font-weight:600}
+
+/* ALERT */
+.alert{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#92400e;line-height:1.5}
+.alert.blue{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}
+.alert svg{flex-shrink:0;margin-top:1px}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e2e5ef;border-radius:8px;padding:10px 14px;margin-bottom:14px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:200px;max-width:300px}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#aab0c6;pointer-events:none}
+input[type=search]{width:100%;background:#f5f6fa;border:1.5px solid #e2e5ef;border-radius:7px;color:#1a1d2e;padding:7px 12px 7px 32px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s}
+input[type=search]:focus{border-color:#2563eb;background:#fff}
+input[type=search]::placeholder{color:#aab0c6}
+.pills{display:flex;gap:5px;flex-wrap:wrap}
+.pill{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;border:1.5px solid #e2e5ef;background:#f5f6fa;color:#7a8099;cursor:pointer;transition:all .12s}
+.pill:hover{border-color:#aab0c6;color:#4a5068}
+.pill.active{background:var(--pc);border-color:var(--pc);color:#fff;font-weight:600}
+.pill[data-f="ALL"]{--pc:#64748b}.pill[data-f="KNR"]{--pc:#2563eb}.pill[data-f="KPBA"]{--pc:#7c3aed}.pill[data-f="TPBA"]{--pc:#059669}.pill[data-f="CHK"]{--pc:#dc2626}
+.result-count{font-size:12px;color:#7a8099;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* SELECTION BAR */
+.sel-bar{display:none;align-items:center;gap:12px;flex-wrap:wrap;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 16px;margin-bottom:12px}
+.sel-bar.visible{display:flex}
+.sel-bar-info{font-size:13px;color:#78350f;font-weight:500;flex:1}
+.sel-bar-value{font-size:14px;font-weight:700;color:#1a1d2e}
+.sel-actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .12s;border:none;white-space:nowrap}
+.btn-outline{background:#fff;border:1.5px solid #e2e5ef;color:#4a5068}.btn-outline:hover{border-color:#aab0c6;color:#1a1d2e}
+.btn-excel{background:#16a34a;color:#fff}.btn-excel:hover{background:#15803d}
+.btn-pdf{background:#dc2626;color:#fff}.btn-pdf:hover{background:#b91c1c}
+.btn-clear{background:#f5f6fa;border:1.5px solid #e2e5ef;color:#7a8099}.btn-clear:hover{color:#dc2626;border-color:#dc2626}
+
+/* TABLE */
+.tbl-wrap{background:#fff;border:1px solid #e2e5ef;border-radius:10px;overflow:hidden;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:700px}
+thead th{background:#f5f6fa;padding:10px 12px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#7a8099;border-bottom:1.5px solid #e2e5ef;cursor:pointer;user-select:none;white-space:nowrap;text-align:left;transition:color .12s}
+thead th:hover{color:#2563eb}
+thead th.num{text-align:right}
+thead th.chk-col{text-align:center;cursor:default;width:40px}
+thead th.sort-asc::after{content:' ↑';color:#2563eb}
+thead th.sort-desc::after{content:' ↓';color:#2563eb}
+tbody tr{border-bottom:1px solid #f0f2fa;transition:background .08s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#f8f9fc}
+tbody tr.selected{background:#fffbeb !important}
+td{padding:9px 12px;font-size:13px;color:#1a1d2e;vertical-align:middle}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.pname{max-width:260px}
+td.pname span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+td.pno{font-size:11px;color:#7a8099;font-family:monospace;white-space:nowrap}
+td.chk-col{text-align:center}
+input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:#2563eb}
+.btag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.btag.KNR{background:#eff4ff;color:#2563eb}.btag.KPBA{background:#f4f0ff;color:#7c3aed}
+.btag.TPBA{background:#ecfdf5;color:#059669}.btag.CHK{background:#fff0f0;color:#dc2626}
+.val-hi{color:#dc2626;font-weight:600}.val-md{color:#b45309;font-weight:500}
+.bo-yes{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#059669;background:#ecfdf5;padding:2px 7px;border-radius:4px}
+.bo-no{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#dc2626;background:#fff0f0;padding:2px 7px;border-radius:4px}
+.load-btn{display:block;width:100%;padding:11px;background:#f5f6fa;border:none;border-top:1px solid #e2e5ef;color:#2563eb;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:background .12s}
+.load-btn:hover{background:#eff4ff}
+.empty{text-align:center;padding:60px;color:#aab0c6;font-size:14px;display:none}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.site-header,.tab-nav,.page{padding-left:16px;padding-right:16px}}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div>
+    <h1>Stock Analysis — Caco</h1>
+    <p>FY 2025-26 &nbsp;·&nbsp; Saleable stock · No-sale · Dead stock</p>
+  </div>
+  <div class="date-badge">As of 19 June 2026</div>
+</header>
+
+<div class="tab-nav">
+  <button class="tab-btn t-sale" onclick="showTab('sale',this)">
+    ✓ Saleable Stock <span class="badge" id="badge-sale">0</span>
+  </button>
+  <button class="tab-btn t-nosale active" onclick="showTab('nosale',this)">
+    No-Sale Stock <span class="badge" id="badge-nosale">0</span>
+  </button>
+  <button class="tab-btn t-dead" onclick="showTab('dead',this)">
+    ⚠ Dead Stock <span class="badge" id="badge-dead">0</span>
+  </button>
+</div>
+
+<!-- ══════════════════ SALEABLE TAB ══════════════════ -->
+<div id="tab-sale" class="page">
+  <div class="alert blue">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+    <div><b>Saleable Stock:</b> these parts appeared in the FY 2025-26 sales register and are still in stock. They have an established sales history and are likely to sell again.</div>
+  </div>
+  <div class="cards" id="sale-cards">
+    <div class="card sale-card active" data-branch="ALL" onclick="saleFilter('ALL',this)"><div class="card-label">All Branches</div><div class="card-value" id="sale-cv-ALL">₹0</div><div class="card-sub"><b id="sale-cc-ALL">0</b> parts · <b id="sale-cq-ALL">0</b> units</div></div>
+    <div class="card sale-card" data-branch="KNR"  onclick="saleFilter('KNR',this)"><div class="card-label">KNR — Kannur</div><div class="card-value" id="sale-cv-KNR">₹0</div><div class="card-sub"><b id="sale-cc-KNR">0</b> parts · <b id="sale-cq-KNR">0</b> units</div></div>
+    <div class="card sale-card" data-branch="KPBA" onclick="saleFilter('KPBA',this)"><div class="card-label">KPBA — Kuthuparamba</div><div class="card-value" id="sale-cv-KPBA">₹0</div><div class="card-sub"><b id="sale-cc-KPBA">0</b> parts · <b id="sale-cq-KPBA">0</b> units</div></div>
+    <div class="card sale-card" data-branch="TPBA" onclick="saleFilter('TPBA',this)"><div class="card-label">TPBA — Taliparamba</div><div class="card-value" id="sale-cv-TPBA">₹0</div><div class="card-sub"><b id="sale-cc-TPBA">0</b> parts · <b id="sale-cq-TPBA">0</b> units</div></div>
+    <div class="card sale-card" data-branch="CHK"  onclick="saleFilter('CHK',this)"><div class="card-label">CHK — Chakkarakkal</div><div class="card-value" id="sale-cv-CHK">₹0</div><div class="card-sub"><b id="sale-cc-CHK">0</b> parts · <b id="sale-cq-CHK">0</b> units</div></div>
+  </div>
+  <div class="sel-bar" id="sale-selbar">
+    <div class="sel-bar-info"><b id="sale-sel-count">0</b> parts selected &nbsp;·&nbsp; Total value: <span class="sel-bar-value" id="sale-sel-value">₹0.00</span></div>
+    <div class="sel-actions">
+      <button class="btn btn-excel" onclick="exportExcel('sale')">⬇ Excel</button>
+      <button class="btn btn-pdf"   onclick="exportPDF('sale')">⬇ PDF</button>
+      <button class="btn btn-clear" onclick="clearSel('sale')">✕ Clear</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="search" id="sale-search" placeholder="Search part name or number…" oninput="saleRender()">
+    </div>
+    <div class="pills" id="sale-pills">
+      <div class="pill active" data-f="ALL" onclick="saleFilter('ALL')">All</div>
+      <div class="pill" data-f="KNR"  onclick="saleFilter('KNR')">KNR</div>
+      <div class="pill" data-f="KPBA" onclick="saleFilter('KPBA')">KPBA</div>
+      <div class="pill" data-f="TPBA" onclick="saleFilter('TPBA')">TPBA</div>
+      <div class="pill" data-f="CHK"  onclick="saleFilter('CHK')">CHK</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-left:auto;align-items:center">
+      <button class="btn btn-outline" onclick="selectVisible('sale')">☑ Select Visible</button>
+      <div class="result-count" id="sale-count"></div>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th class="chk-col"><input type="checkbox" id="sale-chk-all" onclick="toggleAll('sale',this)"></th>
+        <th onclick="saleSort('branch')" id="sale-th-branch">Branch</th>
+        <th onclick="saleSort('name')"   id="sale-th-name">Part Name</th>
+        <th onclick="saleSort('part_no')" id="sale-th-part_no">Part No</th>
+        <th onclick="saleSort('qty')"   id="sale-th-qty"   class="num">Stock Qty</th>
+        <th onclick="saleSort('rate')"  id="sale-th-rate"  class="num">Rate (₹)</th>
+        <th onclick="saleSort('value')" id="sale-th-value" class="num sort-desc">Stock Value (₹)</th>
+      </tr></thead>
+      <tbody id="sale-tbody"></tbody>
+    </table>
+    <div class="empty" id="sale-empty">No matching parts found.</div>
+  </div>
+</div>
+
+<!-- ══════════════════ NO-SALE TAB ══════════════════ -->
+<div id="tab-nosale" class="page active">
+  <div class="cards" id="ns-cards">
+    <div class="card ns-card active" data-branch="ALL" onclick="nsFilter('ALL',this)"><div class="card-label">All Branches</div><div class="card-value" id="ns-cv-ALL">₹0</div><div class="card-sub"><b id="ns-cc-ALL">0</b> parts · <b id="ns-cq-ALL">0</b> units</div></div>
+    <div class="card ns-card" data-branch="KNR"  onclick="nsFilter('KNR',this)"><div class="card-label">KNR — Kannur</div><div class="card-value" id="ns-cv-KNR">₹0</div><div class="card-sub"><b id="ns-cc-KNR">0</b> parts · <b id="ns-cq-KNR">0</b> units</div></div>
+    <div class="card ns-card" data-branch="KPBA" onclick="nsFilter('KPBA',this)"><div class="card-label">KPBA — Kuthuparamba</div><div class="card-value" id="ns-cv-KPBA">₹0</div><div class="card-sub"><b id="ns-cc-KPBA">0</b> parts · <b id="ns-cq-KPBA">0</b> units</div></div>
+    <div class="card ns-card" data-branch="TPBA" onclick="nsFilter('TPBA',this)"><div class="card-label">TPBA — Taliparamba</div><div class="card-value" id="ns-cv-TPBA">₹0</div><div class="card-sub"><b id="ns-cc-TPBA">0</b> parts · <b id="ns-cq-TPBA">0</b> units</div></div>
+    <div class="card ns-card" data-branch="CHK"  onclick="nsFilter('CHK',this)"><div class="card-label">CHK — Chakkarakkal</div><div class="card-value" id="ns-cv-CHK">₹0</div><div class="card-sub"><b id="ns-cc-CHK">0</b> parts · <b id="ns-cq-CHK">0</b> units</div></div>
+  </div>
+  <div class="sel-bar" id="nosale-selbar">
+    <div class="sel-bar-info"><b id="nosale-sel-count">0</b> parts selected &nbsp;·&nbsp; Total value: <span class="sel-bar-value" id="nosale-sel-value">₹0.00</span></div>
+    <div class="sel-actions">
+      <button class="btn btn-excel" onclick="exportExcel('nosale')">⬇ Excel</button>
+      <button class="btn btn-pdf"   onclick="exportPDF('nosale')">⬇ PDF</button>
+      <button class="btn btn-clear" onclick="clearSel('nosale')">✕ Clear</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="search" id="ns-search" placeholder="Search part name or number…" oninput="nsRender()">
+    </div>
+    <div class="pills" id="ns-pills">
+      <div class="pill active" data-f="ALL" onclick="nsFilter('ALL')">All</div>
+      <div class="pill" data-f="KNR"  onclick="nsFilter('KNR')">KNR</div>
+      <div class="pill" data-f="KPBA" onclick="nsFilter('KPBA')">KPBA</div>
+      <div class="pill" data-f="TPBA" onclick="nsFilter('TPBA')">TPBA</div>
+      <div class="pill" data-f="CHK"  onclick="nsFilter('CHK')">CHK</div>
+    </div>
+    <div class="pills">
+      <div class="pill active" id="ns-bo-all" onclick="nsBoFilter('ALL')" style="--pc:#64748b">All</div>
+      <div class="pill" id="ns-bo-yes" onclick="nsBoFilter('YES')" style="--pc:#059669">In BO ✓</div>
+      <div class="pill" id="ns-bo-no"  onclick="nsBoFilter('NO')"  style="--pc:#dc2626">Not in BO</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-left:auto;align-items:center">
+      <button class="btn btn-outline" onclick="selectVisible('nosale')">☑ Select Visible</button>
+      <div class="result-count" id="ns-count"></div>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th class="chk-col"><input type="checkbox" id="nosale-chk-all" onclick="toggleAll('nosale',this)"></th>
+        <th onclick="nsSort('branch')"  id="ns-th-branch">Branch</th>
+        <th onclick="nsSort('name')"    id="ns-th-name">Part Name</th>
+        <th onclick="nsSort('part_no')" id="ns-th-part_no">Part No</th>
+        <th onclick="nsSort('qty')"     id="ns-th-qty"   class="num">Qty</th>
+        <th onclick="nsSort('rate')"    id="ns-th-rate"  class="num">Rate (₹)</th>
+        <th onclick="nsSort('value')"   id="ns-th-value" class="num sort-desc">Value (₹)</th>
+        <th id="ns-th-bo" style="text-align:center">In BO?</th>
+      </tr></thead>
+      <tbody id="ns-tbody"></tbody>
+    </table>
+    <div class="empty" id="ns-empty">No matching parts found.</div>
+  </div>
+</div>
+
+<!-- ══════════════════ DEAD STOCK TAB ══════════════════ -->
+<div id="tab-dead" class="page">
+  <div class="alert">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <div><b>Dead Stock:</b> zero sales in FY 2025-26 <em>and</em> no backorder demand from any other dealer in the region. No known demand exists for these parts.</div>
+  </div>
+  <div class="cards" id="dead-cards">
+    <div class="card dead-card active" data-branch="ALL" onclick="deadFilter('ALL',this)"><div class="card-label">All Branches</div><div class="card-value" id="dead-cv-ALL">₹0</div><div class="card-sub"><b id="dead-cc-ALL">0</b> parts · <b id="dead-cq-ALL">0</b> units</div></div>
+    <div class="card dead-card" data-branch="KNR"  onclick="deadFilter('KNR',this)"><div class="card-label">KNR — Kannur</div><div class="card-value" id="dead-cv-KNR">₹0</div><div class="card-sub"><b id="dead-cc-KNR">0</b> parts · <b id="dead-cq-KNR">0</b> units</div></div>
+    <div class="card dead-card" data-branch="KPBA" onclick="deadFilter('KPBA',this)"><div class="card-label">KPBA — Kuthuparamba</div><div class="card-value" id="dead-cv-KPBA">₹0</div><div class="card-sub"><b id="dead-cc-KPBA">0</b> parts · <b id="dead-cq-KPBA">0</b> units</div></div>
+    <div class="card dead-card" data-branch="TPBA" onclick="deadFilter('TPBA',this)"><div class="card-label">TPBA — Taliparamba</div><div class="card-value" id="dead-cv-TPBA">₹0</div><div class="card-sub"><b id="dead-cc-TPBA">0</b> parts · <b id="dead-cq-TPBA">0</b> units</div></div>
+    <div class="card dead-card" data-branch="CHK"  onclick="deadFilter('CHK',this)"><div class="card-label">CHK — Chakkarakkal</div><div class="card-value" id="dead-cv-CHK">₹0</div><div class="card-sub"><b id="dead-cc-CHK">0</b> parts · <b id="dead-cq-CHK">0</b> units</div></div>
+  </div>
+  <div class="sel-bar" id="dead-selbar">
+    <div class="sel-bar-info"><b id="dead-sel-count">0</b> parts selected &nbsp;·&nbsp; Total value: <span class="sel-bar-value" id="dead-sel-value">₹0.00</span></div>
+    <div class="sel-actions">
+      <button class="btn btn-excel" onclick="exportExcel('dead')">⬇ Excel</button>
+      <button class="btn btn-pdf"   onclick="exportPDF('dead')">⬇ PDF</button>
+      <button class="btn btn-clear" onclick="clearSel('dead')">✕ Clear</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="search" id="dead-search" placeholder="Search part name or number…" oninput="deadRender()">
+    </div>
+    <div class="pills" id="dead-pills">
+      <div class="pill active" data-f="ALL" onclick="deadFilter('ALL')">All</div>
+      <div class="pill" data-f="KNR"  onclick="deadFilter('KNR')">KNR</div>
+      <div class="pill" data-f="KPBA" onclick="deadFilter('KPBA')">KPBA</div>
+      <div class="pill" data-f="TPBA" onclick="deadFilter('TPBA')">TPBA</div>
+      <div class="pill" data-f="CHK"  onclick="deadFilter('CHK')">CHK</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-left:auto;align-items:center">
+      <button class="btn btn-outline" onclick="selectVisible('dead')">☑ Select Visible</button>
+      <div class="result-count" id="dead-count"></div>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th class="chk-col"><input type="checkbox" id="dead-chk-all" onclick="toggleAll('dead',this)"></th>
+        <th onclick="deadSort('branch')"  id="dead-th-branch">Branch</th>
+        <th onclick="deadSort('name')"    id="dead-th-name">Part Name</th>
+        <th onclick="deadSort('part_no')" id="dead-th-part_no">Part No</th>
+        <th onclick="deadSort('qty')"     id="dead-th-qty"   class="num">Qty</th>
+        <th onclick="deadSort('rate')"    id="dead-th-rate"  class="num">Rate (₹)</th>
+        <th onclick="deadSort('value')"   id="dead-th-value" class="num sort-desc">Value (₹)</th>
+      </tr></thead>
+      <tbody id="dead-tbody"></tbody>
+    </table>
+    <div class="empty" id="dead-empty">No matching parts found.</div>
+  </div>
+</div>
+
+<script>
+const fmtN=n=>n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtI=n=>n.toLocaleString('en-IN');
+const fmtL=n=>n>=100000?'₹'+(n/100000).toFixed(2)+'L':'₹'+fmtN(n);
+const BRANCH_NAMES={KNR:'Kannur',KPBA:'Kuthuparamba',TPBA:'Taliparamba',CHK:'Chakkarakkal'};
+const BRANCH_COLORS={KNR:'#2563eb',KPBA:'#7c3aed',TPBA:'#059669',CHK:'#dc2626'};
+
+// Assign stable IDs
+STOCK_DATA.saleable.forEach((r,i)=>r._id=i);
+STOCK_DATA.no_sale.forEach((r,i)=>r._id=i);
+STOCK_DATA.dead.forEach((r,i)=>r._id=i);
+
+// ── Populate cards ────────────────────────────────────────────────────────
+const S=STOCK_DATA.summary;
+let saleT={p:0,q:0,v:0},nsT={p:0,q:0,v:0},deadT={p:0,q:0,v:0};
+for(const [br,s] of Object.entries(S)){
+  document.getElementById('sale-cv-'+br).textContent=fmtL(s.saleable_value);
+  document.getElementById('sale-cc-'+br).textContent=fmtI(s.saleable);
+  document.getElementById('sale-cq-'+br).textContent=fmtI(s.saleable_qty);
+  document.getElementById('ns-cv-'+br).textContent=fmtL(s.ns_value);
+  document.getElementById('ns-cc-'+br).textContent=fmtI(s.no_sale);
+  document.getElementById('ns-cq-'+br).textContent=fmtI(s.ns_qty);
+  document.getElementById('dead-cv-'+br).textContent=fmtL(s.dead_value);
+  document.getElementById('dead-cc-'+br).textContent=fmtI(s.dead);
+  document.getElementById('dead-cq-'+br).textContent=fmtI(s.dead_qty);
+  saleT.p+=s.saleable; saleT.q+=s.saleable_qty; saleT.v+=s.saleable_value;
+  nsT.p+=s.no_sale; nsT.q+=s.ns_qty; nsT.v+=s.ns_value;
+  deadT.p+=s.dead; deadT.q+=s.dead_qty; deadT.v+=s.dead_value;
+}
+document.getElementById('sale-cv-ALL').textContent=fmtL(saleT.v);
+document.getElementById('sale-cc-ALL').textContent=fmtI(saleT.p);
+document.getElementById('sale-cq-ALL').textContent=fmtI(saleT.q);
+document.getElementById('ns-cv-ALL').textContent=fmtL(nsT.v);
+document.getElementById('ns-cc-ALL').textContent=fmtI(nsT.p);
+document.getElementById('ns-cq-ALL').textContent=fmtI(nsT.q);
+document.getElementById('dead-cv-ALL').textContent=fmtL(deadT.v);
+document.getElementById('dead-cc-ALL').textContent=fmtI(deadT.p);
+document.getElementById('dead-cq-ALL').textContent=fmtI(deadT.q);
+document.getElementById('badge-sale').textContent=fmtI(saleT.p);
+document.getElementById('badge-nosale').textContent=fmtI(nsT.p);
+document.getElementById('badge-dead').textContent=fmtI(deadT.p);
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+}
+
+// ── Selection ─────────────────────────────────────────────────────────────
+const sel={sale:new Set(),nosale:new Set(),dead:new Set()};
+const srcMap={sale:'saleable',nosale:'no_sale',dead:'dead'};
+
+function updateSelBar(tab){
+  const ids=sel[tab],src=STOCK_DATA[srcMap[tab]];
+  const items=src.filter(r=>ids.has(r._id));
+  const total=items.reduce((s,r)=>s+r.value,0);
+  document.getElementById(tab+'-sel-count').textContent=fmtI(ids.size);
+  document.getElementById(tab+'-sel-value').textContent='₹'+fmtN(total);
+  document.getElementById(tab+'-selbar').classList.toggle('visible',ids.size>0);
+}
+function toggleRow(tab,id,chk){
+  if(chk) sel[tab].add(id); else sel[tab].delete(id);
+  const tr=document.querySelector(`[data-rid="${tab}-${id}"]`);
+  if(tr) tr.classList.toggle('selected',chk);
+  updateSelBar(tab);
+}
+function toggleAll(tab,chk){
+  const rows=currentRows[tab];
+  rows.forEach(r=>{if(chk.checked) sel[tab].add(r._id); else sel[tab].delete(r._id);});
+  document.querySelectorAll(`#${tab}-tbody input[type=checkbox]`).forEach(c=>c.checked=chk.checked);
+  document.querySelectorAll(`#${tab}-tbody tr[data-rid]`).forEach(tr=>tr.classList.toggle('selected',chk.checked));
+  updateSelBar(tab);
+}
+function selectVisible(tab){
+  currentRows[tab].forEach(r=>sel[tab].add(r._id));
+  document.querySelectorAll(`#${tab}-tbody input[type=checkbox]`).forEach(c=>c.checked=true);
+  document.querySelectorAll(`#${tab}-tbody tr[data-rid]`).forEach(tr=>tr.classList.add('selected'));
+  updateSelBar(tab);
+}
+function clearSel(tab){
+  sel[tab].clear();
+  document.querySelectorAll(`#${tab}-tbody input[type=checkbox]`).forEach(c=>c.checked=false);
+  document.querySelectorAll(`#${tab}-tbody tr[data-rid]`).forEach(tr=>tr.classList.remove('selected'));
+  const ac=document.getElementById(tab+'-chk-all'); if(ac) ac.checked=false;
+  updateSelBar(tab);
+}
+
+// ── Export helpers ────────────────────────────────────────────────────────
+const TAB_LABELS={sale:'Saleable Stock',nosale:'No-Sale Stock',dead:'Dead Stock'};
+
+function exportExcel(tab){
+  const src=STOCK_DATA[srcMap[tab]];
+  const items=src.filter(r=>sel[tab].has(r._id));
+  if(!items.length){alert('Select at least one part to export.');return;}
+  const label=TAB_LABELS[tab], isNS=tab==='nosale';
+  const groups={};
+  items.forEach(r=>{if(!groups[r.branch])groups[r.branch]=[];groups[r.branch].push(r);});
+  const wb=XLSX.utils.book_new();
+
+  // All-branches sheet
+  const allData=[
+    [label+' — All Branches'],
+    ['Caco | FY 2025-26 | As of 19 June 2026'],
+    [],
+    ['S.No','Branch','Location','Part Name','Part Number','Closing Qty','Rate (₹)','Value (₹)',...(isNS?['In Backorder?']:[])]
+  ];
+  let sno=1,gQty=0,gVal=0;
+  Object.keys(groups).sort().forEach(br=>{
+    groups[br].forEach(r=>{
+      const row=[sno++,r.branch,BRANCH_NAMES[br]||br,r.name,r.part_no||'',r.qty,r.rate,r.value];
+      if(isNS) row.push(r.in_bo?'Yes':'No');
+      allData.push(row); gQty+=r.qty; gVal+=r.value;
+    });
+  });
+  allData.push([]);
+  const totRow=['','','','TOTAL','',gQty,'',gVal]; if(isNS) totRow.push('');
+  allData.push(totRow);
+  const ws=XLSX.utils.aoa_to_sheet(allData);
+  ws['!cols']=[{wch:6},{wch:7},{wch:16},{wch:45},{wch:22},{wch:12},{wch:12},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,'All Branches');
+
+  // Per-branch sheets
+  Object.keys(groups).sort().forEach(br=>{
+    const bData=[
+      [label+' — '+br+' ('+BRANCH_NAMES[br]+')'],
+      ['Caco | FY 2025-26 | As of 19 June 2026'],
+      [],
+      ['S.No','Part Name','Part Number','Closing Qty','Rate (₹)','Value (₹)',...(isNS?['In Backorder?']:[])]
+    ];
+    let bn=1,bQ=0,bV=0;
+    groups[br].forEach(r=>{
+      const row=[bn++,r.name,r.part_no||'',r.qty,r.rate,r.value];
+      if(isNS) row.push(r.in_bo?'Yes':'No');
+      bData.push(row); bQ+=r.qty; bV+=r.value;
+    });
+    bData.push([]);
+    const bTot=['','TOTAL','',bQ,'',bV]; if(isNS) bTot.push('');
+    bData.push(bTot);
+    const ws2=XLSX.utils.aoa_to_sheet(bData);
+    ws2['!cols']=[{wch:6},{wch:48},{wch:22},{wch:12},{wch:12},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws2,br+' - '+(BRANCH_NAMES[br]||br));
+  });
+  XLSX.writeFile(wb,label.replace(/ /g,'_')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+function exportPDF(tab){
+  const src=STOCK_DATA[srcMap[tab]];
+  const items=src.filter(r=>sel[tab].has(r._id));
+  if(!items.length){alert('Select at least one part to export.');return;}
+  const label=TAB_LABELS[tab], isNS=tab==='nosale';
+  const groups={};
+  items.forEach(r=>{if(!groups[r.branch])groups[r.branch]=[];groups[r.branch].push(r);});
+  const gVal=items.reduce((s,r)=>s+r.value,0);
+  const gQty=items.reduce((s,r)=>s+r.qty,0);
+  let rows=''; let sno=1;
+  const thBO=isNS?'<th style="text-align:center">In BO?</th>':'';
+  Object.keys(groups).sort().forEach(br=>{
+    const bc=BRANCH_COLORS[br]||'#2563eb';
+    const brItems=groups[br], brV=brItems.reduce((s,r)=>s+r.value,0);
+    rows+=`<tr><td colspan="${isNS?8:7}" style="background:#f8f9fc;padding:9px 12px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:${bc};border-bottom:2px solid ${bc};border-top:2px solid #e2e5ef">${br} — ${BRANCH_NAMES[br]||br} &nbsp; <span style="font-weight:500;color:#4a5068">${brItems.length} parts · ₹${fmtN(brV)}</span></td></tr>`;
+    brItems.forEach(r=>{
+      const vc=r.value>=5000?'color:#dc2626;font-weight:600':r.value>=1000?'color:#b45309':'';
+      const boC=isNS?`<td style="text-align:center;font-size:11px;font-weight:600;color:${r.in_bo?'#059669':'#dc2626'}">${r.in_bo?'✓ Yes':'✗ No'}</td>`:'';
+      rows+=`<tr><td style="text-align:center;color:#7a8099;font-size:11px">${sno++}</td><td><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;background:${bc}22;color:${bc}">${r.branch}</span></td><td style="font-weight:500;font-size:12px;max-width:200px">${r.name}</td><td style="font-family:monospace;font-size:10px;color:#6b7280">${r.part_no||'—'}</td><td style="text-align:right">${fmtI(r.qty)}</td><td style="text-align:right">${fmtN(r.rate)}</td><td style="text-align:right;${vc}">${fmtN(r.value)}</td>${boC}</tr>`;
+    });
+    rows+=`<tr style="border-top:1px solid #e2e5ef"><td colspan="${isNS?5:4}" style="text-align:right;font-weight:600;font-size:11px;color:#4a5068;padding:6px 12px">${br} Total</td><td></td><td style="text-align:right;font-weight:700">₹${fmtN(brV)}</td>${isNS?'<td></td>':''}</tr>`;
+  });
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${label}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;color:#1a1d2e;background:#fff;padding:24px}.hdr{border-bottom:3px solid #1a1d2e;padding-bottom:14px;margin-bottom:18px}.hdr h1{font-size:19px;font-weight:700}.hdr p{font-size:11px;color:#6b7280;margin-top:3px}.summary{display:flex;gap:24px;background:#f8f9fc;border:1px solid #e2e5ef;border-radius:6px;padding:12px 16px;margin-bottom:18px}.si label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7a8099}.si span{display:block;font-size:16px;font-weight:700;color:#1a1d2e;margin-top:2px}table{width:100%;border-collapse:collapse}thead th{background:#1a1d2e;color:#fff;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}thead th:nth-child(n+5){text-align:right}tbody td{padding:7px 10px;border-bottom:1px solid #f0f2fa;vertical-align:middle}tfoot td{background:#1a1d2e;color:#fff;font-weight:700;padding:8px 10px;text-align:right}tfoot td:first-child,tfoot td:nth-child(2),tfoot td:nth-child(3){text-align:left}@media print{body{padding:10px}@page{size:A4 landscape;margin:12mm 8mm}}</style></head>
+  <body><div class="hdr"><h1>Caco — ${label}</h1><p>FY 2025-26 · As of 19 June 2026 · Generated ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</p></div>
+  <div class="summary"><div class="si"><label>Selected Parts</label><span>${fmtI(items.length)}</span></div><div class="si"><label>Total Quantity</label><span>${fmtI(gQty)}</span></div><div class="si"><label>Total Value</label><span>₹${fmtN(gVal)}</span></div><div class="si"><label>Branches</label><span>${Object.keys(groups).join(', ')}</span></div></div>
+  <table><thead><tr><th style="width:38px">S.No</th><th>Branch</th><th>Part Name</th><th>Part No</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate (₹)</th><th style="text-align:right">Value (₹)</th>${thBO}</tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><td colspan="${isNS?5:4}">GRAND TOTAL</td><td></td><td>₹${fmtN(gVal)}</td>${isNS?'<td></td>':''}</tr></tfoot></table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`;
+  const w=window.open('','_blank','width=1100,height=800');
+  w.document.write(html); w.document.close();
+}
+
+// ══════════════════════════════ TABLE ENGINE ══════════════════════════════
+const CHUNK=200;
+const currentRows={sale:[],nosale:[],dead:[]};
+const state={
+  sale: {branch:'ALL',sortCol:'value',sortDir:-1,pending:[]},
+  nosale:{branch:'ALL',bo:'ALL',sortCol:'value',sortDir:-1,pending:[]},
+  dead: {branch:'ALL',sortCol:'value',sortDir:-1,pending:[]}
+};
+
+function makeFilter(tab){
+  return function(b){
+    state[tab].branch=b;
+    document.querySelectorAll(`#${tab}-cards .card`).forEach(c=>c.classList.toggle('active',c.dataset.branch===b));
+    document.querySelectorAll(`#${tab}-pills .pill`).forEach(p=>p.classList.toggle('active',p.dataset.f===b));
+    renders[tab]();
+  };
+}
+function makeSort(tab){
+  return function(col){
+    const st=state[tab];
+    if(st.sortCol===col) st.sortDir*=-1;
+    else{st.sortCol=col; st.sortDir=(col==='name'||col==='branch'||col==='part_no')?1:-1;}
+    document.querySelectorAll(`thead th[id^="${tab}-th-"]`).forEach(th=>{
+      th.classList.remove('sort-asc','sort-desc');
+      const sfx=tab==='nosale'?'ns':tab;
+      if(th.id===`${sfx}-th-`+col||th.id===`${tab}-th-`+col) th.classList.add(st.sortDir===1?'sort-asc':'sort-desc');
+    });
+    renders[tab]();
+  };
+}
+
+function rowHTML(tab,r,sno){
+  const chked=sel[tab].has(r._id)?'checked':'';
+  const selCls=sel[tab].has(r._id)?'selected':'';
+  const vc=r.value>=5000?'val-hi':r.value>=1000?'val-md':'';
+  const extra=tab==='nosale'?`<td style="text-align:center">${r.in_bo?'<span class="bo-yes">✓ In BO</span>':'<span class="bo-no">✗ None</span>'}</td>`:'';
+  return `<tr class="${selCls}" data-rid="${tab}-${r._id}">
+    <td class="chk-col"><input type="checkbox" ${chked} onchange="toggleRow('${tab}',${r._id},this.checked)"></td>
+    <td><span class="btag ${r.branch}">${r.branch}</span></td>
+    <td class="pname"><span title="${r.name}">${r.name}</span></td>
+    <td class="pno">${r.part_no||'—'}</td>
+    <td class="num">${fmtI(r.qty)}</td>
+    <td class="num">${fmtN(r.rate)}</td>
+    <td class="num ${vc}">${fmtN(r.value)}</td>
+    ${extra}
+  </tr>`;
+}
+
+function makeRender(tab,srcKey){
+  return function(){
+    const st=state[tab];
+    const searchId=tab==='nosale'?'ns-search':tab+'-search';
+    const q=document.getElementById(searchId).value.trim().toLowerCase();
+    let rows=STOCK_DATA[srcKey];
+    if(st.branch!=='ALL') rows=rows.filter(r=>r.branch===st.branch);
+    if(tab==='nosale'&&st.bo==='YES') rows=rows.filter(r=>r.in_bo);
+    if(tab==='nosale'&&st.bo==='NO')  rows=rows.filter(r=>!r.in_bo);
+    if(q) rows=rows.filter(r=>r.name.toLowerCase().includes(q)||r.part_no.toLowerCase().includes(q));
+    rows=[...rows].sort((a,b)=>{const va=a[st.sortCol]??'',vb=b[st.sortCol]??'';return(typeof va==='number'?va-vb:va.localeCompare(vb))*st.sortDir;});
+    currentRows[tab]=rows;
+    const tbodyId=tab==='nosale'?'ns-tbody':tab+'-tbody';
+    const emptyId=tab==='nosale'?'ns-empty':tab+'-empty';
+    const countId=tab==='nosale'?'ns-count':tab+'-count';
+    document.getElementById(countId).textContent=fmtI(rows.length)+' parts';
+    const tbody=document.getElementById(tbodyId), empty=document.getElementById(emptyId);
+    if(!rows.length){tbody.innerHTML='';empty.style.display='block';return;}
+    empty.style.display='none';
+    st.pending=rows.slice(CHUNK);
+    let html=rows.slice(0,CHUNK).map((r,i)=>rowHTML(tab,r,i+1)).join('');
+    if(st.pending.length){
+      const nc=tab==='nosale'?8:7;
+      html+=`<tr id="${tab}-lmr"><td colspan="${nc}" style="padding:0"><button class="load-btn" onclick="loadMore('${tab}')">Show ${fmtI(st.pending.length)} more ↓</button></td></tr>`;
+    }
+    tbody.innerHTML=html;
+  };
+}
+
+function loadMore(tab){
+  const st=state[tab], lmr=document.getElementById(tab+'-lmr');
+  if(lmr){lmr.outerHTML=st.pending.map((r,i)=>rowHTML(tab,r,currentRows[tab].length-st.pending.length+i+1)).join('');st.pending=[];}
+}
+
+const renders={sale:makeRender('sale','saleable'),nosale:makeRender('nosale','no_sale'),dead:makeRender('dead','dead')};
+const saleFilter=makeFilter('sale');
+const nsFilter=makeFilter('nosale');
+const deadFilter=makeFilter('dead');
+const saleSort=makeSort('sale');
+const nsSort=makeSort('nosale');
+const deadSort=makeSort('dead');
+
+function nsBoFilter(v){
+  state.nosale.bo=v;
+  ['ALL','YES','NO'].forEach(x=>document.getElementById('ns-bo-'+x.toLowerCase()).classList.toggle('active',x===v));
+  renders.nosale();
+}
+
+// init – start on nosale tab, render all
+renders.sale(); renders.nosale(); renders.dead();
+// set nosale tab as default active
+document.querySelector('.t-nosale').classList.add('active');
+</script>
+</body>
+</html>
